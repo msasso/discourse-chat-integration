@@ -19,15 +19,17 @@ module DiscourseChatIntegration::Provider::TelegramProvider
         chat_id = params['message']['chat']['id']
 
         message_text = process_command(params['message'])
+        
+        if message_text
+          message = {
+            chat_id: chat_id,
+            text: message_text,
+            parse_mode: "html",
+            disable_web_page_preview: true,
+          }
 
-        message = {
-          chat_id: chat_id,
-          text: message_text,
-          parse_mode: "html",
-          disable_web_page_preview: true,
-        }
-
-        DiscourseChatIntegration::Provider::TelegramProvider.sendMessage(message)
+          DiscourseChatIntegration::Provider::TelegramProvider.sendMessage(message)
+        end
 
       elsif params.dig('channel_post', 'text')&.include?('/getchatid')
         chat_id = params['channel_post']['chat']['id']
@@ -62,18 +64,10 @@ module DiscourseChatIntegration::Provider::TelegramProvider
 
       channel = DiscourseChatIntegration::Channel.with_provider(provider).with_data_value('chat_id', chat_id).first
 
-      text_key = "unknown_chat" if channel.nil?
+      return if channel.nil?
       # If slash commands disabled, send a generic message
-      text_key = "known_chat" if !SiteSetting.chat_integration_telegram_enable_slash_commands
-      text_key = "help" if message['text'].blank?
-
-      if text_key.present?
-        return  I18n.t(
-          "chat_integration.provider.telegram.#{text_key}",
-          site_title: CGI::escapeHTML(SiteSetting.title),
-          chat_id: chat_id,
-        )
-      end
+      return if !SiteSetting.chat_integration_telegram_enable_slash_commands
+      return if message['text'].blank?
 
       tokens = message['text'].split(" ")
 
